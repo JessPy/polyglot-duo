@@ -4,7 +4,7 @@ import { AudioPlayer } from '@/components/shared/AudioPlayer'
 import { EmptyState } from '@/components/shared/Page'
 import { Card } from '@/components/ui/card'
 import { Field, NativeSelect } from '@/components/ui/input'
-import { journeyDay } from '@/lib/competition'
+import { journeyLabel } from '@/lib/competition'
 import { EVALUATION_CRITERIA } from '@/lib/constants'
 import { formatLong, formatSeconds } from '@/lib/dates'
 import { evaluationTotal } from '@/lib/stats'
@@ -37,7 +37,7 @@ export function CompareProgress({ participant, recordings, evaluations, initial 
 
   const option = (r: AudioRecording) => (
     <option key={r.id} value={r.id}>
-      Dia {journeyDay(participant.startDate, r.date)} · {r.title}
+      {journeyLabel(participant.startDate, r.date, true)} · {r.title}
     </option>
   )
 
@@ -48,7 +48,7 @@ export function CompareProgress({ participant, recordings, evaluations, initial 
           <p className="text-xs font-medium text-muted-foreground uppercase">{label}</p>
           <p className="font-medium">{r.title}</p>
           <p className="text-xs text-muted-foreground">
-            {formatLong(r.date)} · dia {journeyDay(participant.startDate, r.date)} · {formatSeconds(r.durationSeconds)}
+            {formatLong(r.date)} · {journeyLabel(participant.startDate, r.date)} · {formatSeconds(r.durationSeconds)}
           </p>
         </div>
         <AudioPlayer recordingId={r.id} fallbackDuration={r.durationSeconds} compact />

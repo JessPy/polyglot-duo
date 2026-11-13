@@ -1,5 +1,5 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Flag, GitCompareArrows, HardDrive, Library, Mic, TrendingUp } from 'lucide-react'
+import { Flag, GitCompareArrows, HardDrive, Library, Mic, TrendingUp, Upload } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
@@ -13,7 +13,7 @@ import { useActiveParticipant, useDataBundle } from '@/hooks/useData'
 import { pColor } from '@/hooks/useParticipantColors'
 import { useToday } from '@/hooks/useToday'
 import { speakingEvolution } from '@/lib/chartData'
-import { journeyDay, milestoneRecordings } from '@/lib/competition'
+import { journeyDay, journeyLabel, milestoneRecordings } from '@/lib/competition'
 import { MILESTONE_DAYS } from '@/lib/constants'
 import { addDays, formatLong, formatSeconds, formatShort } from '@/lib/dates'
 import { evaluationTotal, isOralChallenge } from '@/lib/stats'
@@ -23,6 +23,7 @@ import { useUiStore } from '@/store/ui'
 import { CompareProgress } from './CompareProgress'
 import { RecorderPanel } from './RecorderPanel'
 import { RecordingLibrary } from './RecordingLibrary'
+import { UploadAudioDialog } from './UploadAudioDialog'
 
 const CRITERIA_LINES = [
   { key: 'clarity', label: 'Clareza', dash: '0' },
@@ -39,6 +40,7 @@ export default function SpeakingPage() {
   const [params, setParams] = useSearchParams()
   const tab = params.get('tab') ?? 'record'
   const [compare, setCompare] = useState<[string?, string?]>([])
+  const [uploadOpen, setUploadOpen] = useState(false)
   const storage = useLiveQuery(() => getStorageInfo(), [bundle?.recordings.length])
 
   const recordings = useMemo(() => (bundle && active ? bundle.recordings.filter((r) => r.participantId === active.id) : []), [bundle, active])
@@ -61,7 +63,14 @@ export default function SpeakingPage() {
         title="Speaking Studio"
         icon={Mic}
         description="Grave, ouça e compare sua fala ao longo dos meses. Tudo fica salvo neste navegador."
-        actions={<ParticipantPicker participants={bundle.participants} value={active.id} onChange={setActive} />}
+        actions={
+          <>
+            <ParticipantPicker participants={bundle.participants} value={active.id} onChange={setActive} />
+            <Button variant="outline" onClick={() => setUploadOpen(true)}>
+              <Upload /> Adicionar áudio
+            </Button>
+          </>
+        }
       />
 
       <Tabs value={tab} onValueChange={setTab}>
@@ -175,7 +184,7 @@ export default function SpeakingPage() {
                     <li key={r.id} className="relative pb-5 last:pb-0">
                       <span aria-hidden className={cn('absolute top-1.5 -left-[31px] size-3 rounded-full border-2 border-card', milestone ? 'size-3.5' : '')} style={{ background: milestone ? pColor(active) : 'var(--chart-axis)' }} />
                       <p className="text-xs text-muted-foreground">
-                        Dia {journeyDay(active.startDate, r.date)} · {formatLong(r.date)}
+                        {journeyLabel(active.startDate, r.date, true)} · {formatLong(r.date)}
                       </p>
                       <p className="font-medium">
                         {r.title} {milestone && <Badge variant="brand">Marco</Badge>}
@@ -193,6 +202,7 @@ export default function SpeakingPage() {
           </section>
         </TabsContent>
       </Tabs>
+      <UploadAudioDialog open={uploadOpen} onOpenChange={setUploadOpen} participant={active} />
     </PageTransition>
   )
 }

@@ -1,5 +1,6 @@
 import { db } from '@/db/database'
 import { emitDataChange } from '@/db/events'
+import { todayKey } from '@/lib/dates'
 import { nowIso, uid } from '@/lib/utils'
 import type { AudioRecording, SpeakingEvaluation } from '@/types'
 import { activitiesRepo } from './activities'
@@ -8,6 +9,11 @@ export type RecordingInput = Omit<AudioRecording, 'id' | 'createdAt' | 'size' | 
 export type EvaluationInput = Pick<SpeakingEvaluation, 'clarity' | 'grammar' | 'vocabulary' | 'fluency' | 'evaluator'>
 
 export class StorageError extends Error {}
+
+function assertValidDate(date: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('Informe uma data válida.')
+  if (date > todayKey()) throw new Error('A data não pode estar no futuro.')
+}
 
 export const recordingsRepo = {
   list(participantId?: string): Promise<AudioRecording[]> {
@@ -21,14 +27,15 @@ export const recordingsRepo = {
     return (await db.recordingBlobs.get(id))?.blob
   },
   /** Salva metadados e o Blob original (sem Base64) numa única transação. */
-  async save(input: RecordingInput, blob: Blob, options: { registerAsSpeaking: boolean }): Promise<string> {
+  async save(input: RecordingInput, blob: Blob, options: { registerAsSpeaking: boolean; mimeType?: string }): Promise<string> {
+    assertValidDate(input.date)
     const id = uid()
     const recording: AudioRecording = {
       ...input,
       id,
       createdAt: nowIso(),
       size: blob.size,
-      mimeType: blob.type || 'audio/webm',
+      mimeType: options.mimeType || blob.type || 'audio/webm',
     }
     try {
       await db.transaction('rw', db.recordings, db.recordingBlobs, async () => {
@@ -55,8 +62,18 @@ export const recordingsRepo = {
       notes: r.notes,
     })
   },
+  /** Atualiza metadados. Mudar a data também move a sessão de speaking vinculada (recalcula a semana certa). */
   async update(id: string, changes: Partial<Pick<AudioRecording, 'title' | 'topic' | 'notes' | 'date'>>) {
-    await db.recordings.update(id, changes)
+    if (changes.date !== undefined) assertValidDate(changes.date)
+    await db.transaction('rw', db.recordings, db.activities, async () => {
+      const current = await db.recordings.get(id)
+      if (!current) throw new Error('Gravação não encontrada.')
+      const next = { ...current, ...changes }
+      await db.recordings.put(next)
+      const linked = await db.activities.where('sourceId').equals(id).filter((a) => a.source === 'recording').first()
+      if (linked)
+        await db.activities.update(linked.id, { date: next.date, description: `Gravação: ${next.title}`, notes: next.notes, updatedAt: nowIso() })
+    })
     emitDataChange()
   },
   /** Exclusão definitiva: metadados, áudio, avaliações e atividade vinculada. */

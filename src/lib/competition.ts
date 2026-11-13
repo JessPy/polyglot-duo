@@ -138,6 +138,13 @@ export function journeyDay(startDate: DateKey, date: DateKey): number {
   return diffDays(startDate, date) + 1
 }
 
+/** Rótulo legível do dia da jornada; datas anteriores ao início não viram "dia -4". */
+export function journeyLabel(startDate: DateKey, date: DateKey, capitalized = false): string {
+  const n = journeyDay(startDate, date)
+  const label = n >= 1 ? `dia ${n}` : 'antes do início'
+  return capitalized ? label.charAt(0).toUpperCase() + label.slice(1) : label
+}
+
 /** Encontra, para cada marco (1, 30, 60, 90), a gravação mais próxima do dia (tolerância de ±3 dias). */
 export function milestoneRecordings<T extends { id: ID; date: DateKey; createdAt: string }>(
   startDate: DateKey,

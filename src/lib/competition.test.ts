@@ -68,3 +68,11 @@ describe('marcos de gravação', () => {
     expect(m[60]).toBeUndefined()
   })
 })
+
+describe('rótulo da jornada', () => {
+  it('não mostra dias negativos', async () => {
+    const { journeyLabel } = await import('@/lib/competition')
+    expect(journeyLabel('2026-11-13', '2026-11-13')).toBe('dia 1')
+    expect(journeyLabel('2026-11-13', '2026-11-08', true)).toBe('Antes do início')
+  })
+})

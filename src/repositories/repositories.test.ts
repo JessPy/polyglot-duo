@@ -89,3 +89,26 @@ describe('consultas dos repositories', () => {
     await expect(attemptsRepo.list()).resolves.toEqual([])
   })
 })
+
+describe('edição de gravações', () => {
+  it('mudar o dia move a sessão de speaking vinculada e rejeita datas futuras', async () => {
+    const { recordingsRepo, activitiesRepo } = await import('@/repositories')
+    const { addDays } = await import('@/lib/dates')
+    await Promise.all(db.tables.map((t) => t.clear()))
+    const [a] = await setup()
+    const rec = {
+      id: 'rec1', participantId: a, language: 'es' as const, date: todayKey(), createdAt: new Date().toISOString(),
+      durationSeconds: 720, title: 'Teste', topic: '', mimeType: 'audio/mp4', size: 10, notes: '',
+    }
+    await db.recordings.add(rec)
+    await recordingsRepo.registerActivity(rec)
+    const earlier = addDays(todayKey(), -10)
+    await recordingsRepo.update('rec1', { date: earlier, title: 'Dia 1' })
+    expect((await db.recordings.get('rec1'))?.date).toBe(earlier)
+    const act = await activitiesRepo.findBySource('rec1')
+    expect(act?.date).toBe(earlier)
+    expect(act?.description).toBe('Gravação: Dia 1')
+    expect(await db.activities.count()).toBe(1)
+    await expect(recordingsRepo.update('rec1', { date: addDays(todayKey(), 1) })).rejects.toThrow('futuro')
+  })
+})

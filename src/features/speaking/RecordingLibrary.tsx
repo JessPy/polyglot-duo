@@ -8,8 +8,8 @@ import { ConfirmDialog, Dialog, DialogContent, DialogDescription, DialogFooter, 
 import { Field, Input, NativeSelect, Textarea } from '@/components/ui/input'
 import { Badge } from '@/components/ui/misc'
 import { useAction } from '@/hooks/useAsync'
-import { journeyDay } from '@/lib/competition'
-import { formatLong, formatSeconds } from '@/lib/dates'
+import { journeyLabel } from '@/lib/competition'
+import { formatLong, formatSeconds, todayKey } from '@/lib/dates'
 import { evaluationTotal } from '@/lib/stats'
 import { downloadBlob, formatBytes, slugify } from '@/lib/utils'
 import { recordingsRepo } from '@/repositories'
@@ -48,7 +48,7 @@ export function RecordingLibrary({ participant, recordings, evaluations }: { par
       return sort === 'oldest' ? cmp : -cmp
     })
 
-  if (recordings.length === 0) return <EmptyState icon={Library} title="Nenhuma gravação ainda" description={`As gravações de ${participant.name} aparecerão aqui.`} />
+  if (recordings.length === 0) return <EmptyState icon={Library} title="Nenhuma gravação ainda" description={`As gravações de ${participant.name} aparecerão aqui. Você também pode importar áudios com “Adicionar áudio”.`} />
 
   return (
     <div className="flex flex-col gap-4">
@@ -89,7 +89,7 @@ export function RecordingLibrary({ participant, recordings, evaluations }: { par
               <div className="min-w-0">
                 <p className="truncate font-medium">{r.title}</p>
                 <p className="text-xs text-muted-foreground">
-                  {formatLong(r.date)} · dia {journeyDay(participant.startDate, r.date)} · {formatSeconds(r.durationSeconds)} · {formatBytes(r.size)}
+                  {formatLong(r.date)} · {journeyLabel(participant.startDate, r.date)} · {formatSeconds(r.durationSeconds)} · {formatBytes(r.size)}
                 </p>
                 <div className="mt-1.5 flex flex-wrap gap-1.5">
                   {r.topic && <Badge variant="outline">{r.topic}</Badge>}
@@ -106,7 +106,7 @@ export function RecordingLibrary({ participant, recordings, evaluations }: { par
                 <Button variant="ghost" size="icon-sm" aria-label="Avaliar" title="Avaliar" onClick={() => setEvaluating(r)}>
                   <Star />
                 </Button>
-                <Button variant="ghost" size="icon-sm" aria-label="Editar" title="Renomear / observações" onClick={() => setEditing(r)}>
+                <Button variant="ghost" size="icon-sm" aria-label="Editar" title="Editar título, dia e observações" onClick={() => setEditing(r)}>
                   <Pencil />
                 </Button>
                 <Button variant="ghost" size="icon-sm" aria-label="Baixar arquivo" title="Baixar arquivo" onClick={() => download.run(r)}>
@@ -141,24 +141,29 @@ export function RecordingLibrary({ participant, recordings, evaluations }: { par
 }
 
 function EditRecordingDialog({ recording, onClose }: { recording?: AudioRecording; onClose: () => void }) {
-  const [form, setForm] = useState({ title: '', topic: '', notes: '' })
+  const [form, setForm] = useState({ title: '', topic: '', notes: '', date: '' })
   useEffect(() => {
-    if (recording) setForm({ title: recording.title, topic: recording.topic, notes: recording.notes })
+    if (recording) setForm({ title: recording.title, topic: recording.topic, notes: recording.notes, date: recording.date })
   }, [recording])
+  const dateError = !form.date ? 'Informe a data.' : form.date > todayKey() ? 'A data não pode estar no futuro.' : undefined
   const save = useAction(async () => {
     if (!recording) return
     if (!form.title.trim()) throw new Error('O título não pode ficar vazio.')
-    await recordingsRepo.update(recording.id, { title: form.title.trim(), topic: form.topic.trim(), notes: form.notes.trim() })
+    if (dateError) throw new Error(dateError)
+    await recordingsRepo.update(recording.id, { title: form.title.trim(), topic: form.topic.trim(), notes: form.notes.trim(), date: form.date })
   }, 'Gravação atualizada.')
   return (
     <Dialog open={Boolean(recording)} onOpenChange={(o) => !o && onClose()}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Editar gravação</DialogTitle>
-          <DialogDescription>Renomeie, ajuste o tema ou adicione observações.</DialogDescription>
+          <DialogDescription>Renomeie, mude o dia, ajuste o tema ou adicione observações.</DialogDescription>
         </DialogHeader>
         <Field label="Título" htmlFor="ed-title">
           <Input id="ed-title" value={form.title} maxLength={80} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+        </Field>
+        <Field label="Dia da gravação" htmlFor="ed-date" error={dateError} hint="A sessão de speaking vinculada muda para a semana deste dia.">
+          <Input id="ed-date" type="date" value={form.date} max={todayKey()} onChange={(e) => setForm({ ...form, date: e.target.value })} aria-invalid={Boolean(dateError)} />
         </Field>
         <Field label="Tema" htmlFor="ed-topic">
           <Input id="ed-topic" value={form.topic} maxLength={120} onChange={(e) => setForm({ ...form, topic: e.target.value })} />
@@ -170,7 +175,7 @@ function EditRecordingDialog({ recording, onClose }: { recording?: AudioRecordin
           <Button variant="outline" onClick={onClose}>
             Cancelar
           </Button>
-          <Button disabled={save.pending} onClick={async () => (await save.run()) && onClose()}>
+          <Button disabled={save.pending || Boolean(dateError)} onClick={async () => (await save.run()) && onClose()}>
             Salvar
           </Button>
         </DialogFooter>
